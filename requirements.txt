@@ -11,3 +11,10 @@ openinference-instrumentation-agno>=0.1.0
 # Only required by claude_code_agent_service.py (wraps Claude Code itself
 # as an AgentOS agent). Omit if you only need app.py.
 claude-agent-sdk>=0.2.0
+
+# Optional: sends traces to theagentos.space, a separate third-party SaaS
+# unrelated to Agno's AgentOS above. Only activates if AGENTOS_API_KEY is set.
+agenthog[anthropic]>=0.9.0
+
+# Only required by census_agent.py (offline country-name resolution).
+pycountry>=23.12.11

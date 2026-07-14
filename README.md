@@ -50,6 +50,13 @@ your Claude API key -> app.py / claude_code_agent_service.py (AgentOS, self-host
 
    `.env` is git-ignored — never commit a real key.
 
+3. **Optional** — also send traces to [theagentos.space](https://www.theagentos.space)
+   via the `agenthog` SDK. This is a *separate, unrelated* third-party SaaS
+   (same "AgentOS" name as Agno's product, different company) — get a key
+   from them and set `AGENTOS_API_KEY` / `AGENTOS_AGENT_ID` in `.env`. Leave
+   it blank to skip this entirely; both services detect the missing key and
+   run fine without it (nothing is sent to theagentos.space in that case).
+
 ## Run
 
 **Plain Claude agent** (port 7777):
@@ -84,3 +91,24 @@ You can run either one alone, or both at once on their separate ports.
   subprocess via the `claude-agent-sdk` package — `allowed_tools` and
   `permission_mode` scope what it's allowed to do. Tighten these before
   exposing the endpoint beyond local use.
+
+## Census data agent (`census_agent.py`)
+
+A separate, standalone CLI agent — not wired into AgentOS or agenthog. Ask it
+about a country and it answers with real census/demographic figures.
+
+```bash
+python census_agent.py
+# Enter a country name: south korea
+```
+
+It resolves the country name fully offline via `pycountry`'s bundled
+ISO-3166 database (handles fuzzy input like "uk" or "south korea"), then
+fetches population, growth rate, urban share, life expectancy, density, and
+surface area from the [World Bank's public API](https://api.worldbank.org)
+(no key required), and has Claude turn the figures into a short summary.
+
+The country-resolution logic and the API-response parsing were verified with
+mocked HTTP responses in this sandbox (its network policy blocks arbitrary
+outbound APIs, so the live World Bank call itself couldn't be exercised
+end-to-end here) — test it against the real API on your machine.
