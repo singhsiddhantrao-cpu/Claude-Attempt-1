@@ -29,12 +29,35 @@ import os
 import sys
 from pathlib import Path
 
+import agenthog
 import httpx
 import pycountry
 from dotenv import load_dotenv
 from openai import OpenAI
 
 load_dotenv()
+
+# Optional AgentHog tracing (theagentos.space -- same service app.py reports
+# to). Activates only when both AGENTOS_API_KEY and AGENTOS_WORKSPACE_ID are
+# set; without them the agent runs exactly as before and nothing is sent
+# anywhere. See .env.example.
+_TRACING_ENABLED = bool(os.getenv("AGENTOS_API_KEY")) and bool(os.getenv("AGENTOS_WORKSPACE_ID"))
+if _TRACING_ENABLED:
+    agenthog.init(
+        api_key=os.environ["AGENTOS_API_KEY"],
+        endpoint=os.environ.get("AGENTOS_ENDPOINT", "https://api.theagentos.space"),
+        workspace_id=os.environ["AGENTOS_WORKSPACE_ID"],
+        agent_id="census-data-agent",
+    )
+    # Patches the openai client used in explain(); on agenthog >= 0.6.0 this
+    # also captures raw-HTTP OpenAI-compatible calls made via httpx/requests.
+    agenthog.autoinstrument()
+elif bool(os.getenv("AGENTOS_API_KEY")) != bool(os.getenv("AGENTOS_WORKSPACE_ID")):
+    print(
+        "AgentHog tracing NOT enabled: set both AGENTOS_API_KEY and "
+        "AGENTOS_WORKSPACE_ID (one is missing). See .env.example.",
+        file=sys.stderr,
+    )
 
 MODEL = "meta/llama-3.1-8b-instruct"
 # NVIDIA's hosted NIM endpoint serves this model behind an OpenAI-compatible
@@ -55,6 +78,7 @@ INDICATORS = {
 }
 
 
+@agenthog.tool(name="resolve_country")
 def _resolve_country(name: str) -> tuple[str, str]:
     """Resolve a user-typed country name to (iso3_code, official_name). Offline."""
     try:
@@ -65,6 +89,7 @@ def _resolve_country(name: str) -> tuple[str, str]:
     return match.alpha_3, match.name
 
 
+@agenthog.tool(name="fetch_world_bank_indicator")
 def _fetch_indicator(iso3: str, indicator_code: str) -> dict | None:
     """Fetch the most recent non-empty value for one World Bank indicator."""
     url = f"{WORLD_BANK_BASE}/country/{iso3}/indicator/{indicator_code}"
@@ -80,6 +105,7 @@ def _fetch_indicator(iso3: str, indicator_code: str) -> dict | None:
     return {"year": record["date"], "value": record["value"]}
 
 
+@agenthog.tool(name="fetch_factbook_religions")
 def _fetch_religions(iso3: str) -> str | None:
     """Fetch the religion breakdown for a country from the CIA World Factbook."""
     index = json.loads(FACTBOOK_INDEX_PATH.read_text())
@@ -178,7 +204,17 @@ def explain(report: str) -> str:
 
 
 def run_agent(country: str) -> str:
-    """Retrieve the census data for one country, then explain it. Returns full output."""
+    """Retrieve the census data for one country, then explain it. Returns full output.
+
+    One call = one task_run in AgentHog: the tool steps (country resolution,
+    World Bank + Factbook lookups) and the Llama explanation call all nest
+    under it. A no-op when tracing isn't configured.
+    """
+    with agenthog.start_task_run(agent_id="census-data-agent"):
+        return _run_agent_inner(country)
+
+
+def _run_agent_inner(country: str) -> str:
     official_name, report = get_census_data(country)
     if official_name is None:
         return report

@@ -120,6 +120,15 @@ uses `data/factbook_index.json`, a pre-generated ISO-3166 → Factbook-file map
 (regenerate with `python scripts/build_factbook_index.py` if the mirror ever
 reorganizes).
 
+**AgentHog tracing (optional):** set `AGENTOS_API_KEY` and
+`AGENTOS_WORKSPACE_ID` in `.env` (easiest: run `agenthog init`, which prompts
+for both and writes a gitignored `.env`) and every run is traced to
+[theagentos.space](https://www.theagentos.space) — one `task_run` per country
+lookup, with `resolve_country`, `fetch_world_bank_indicator`,
+`fetch_factbook_religions` tool steps and the Llama call nested inside it.
+Check traces at [app.theagentos.space/traces](https://app.theagentos.space/traces).
+Leave the vars unset and the agent runs exactly as before, sending nothing.
+
 The explanation step calls `meta/llama-3.1-8b-instruct` through NVIDIA's
 OpenAI-compatible API — set `NVIDIA_API_KEY` in `.env` (free keys at
 [build.nvidia.com](https://build.nvidia.com)). To serve the model yourself
