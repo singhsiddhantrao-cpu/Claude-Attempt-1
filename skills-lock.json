@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "agenthog-setup": {
+      "source": "TheAgentOS/agentos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/agenthog-setup/SKILL.md",
+      "computedHash": "3850afb8423e141eed618e51f6ff138f86bed31da722c2c8d542d151c948ec39"
+    }
+  }
+}
