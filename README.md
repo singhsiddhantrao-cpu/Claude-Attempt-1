@@ -95,20 +95,49 @@ You can run either one alone, or both at once on their separate ports.
 ## Census data agent (`census_agent.py`)
 
 A separate, standalone CLI agent — not wired into AgentOS or agenthog. Ask it
-about a country and it answers with real census/demographic figures.
+about a country and it retrieves real census figures, prints them, then has
+**`meta/llama-3.1-8b-instruct`** explain them in plain language.
 
 ```bash
 python census_agent.py
-# Enter a country name: south korea
+# Enter a country name (blank to quit): south korea
+
+python census_agent.py india     # or pass the country as an argument
 ```
 
-It resolves the country name fully offline via `pycountry`'s bundled
-ISO-3166 database (handles fuzzy input like "uk" or "south korea"), then
-fetches population, growth rate, urban share, life expectancy, density, and
-surface area from the [World Bank's public API](https://api.worldbank.org)
-(no key required), and has Claude turn the figures into a short summary.
+What it retrieves, and from where:
 
-The country-resolution logic and the API-response parsing were verified with
-mocked HTTP responses in this sandbox (its network policy blocks arbitrary
-outbound APIs, so the live World Bank call itself couldn't be exercised
-end-to-end here) — test it against the real API on your machine.
+| Figure                 | Source                                                                 |
+| ---------------------- | ---------------------------------------------------------------------- |
+| GDP (current US$)      | [World Bank public API](https://api.worldbank.org) — no key needed     |
+| Total population       | World Bank public API                                                  |
+| Population density     | World Bank public API                                                  |
+| Religions followed     | CIA World Factbook, via the [factbook.json](https://github.com/factbook/factbook.json) mirror |
+
+The country name is resolved fully offline via `pycountry`'s bundled ISO-3166
+database (handles fuzzy input like "uk" or "south korea"). The Factbook lookup
+uses `data/factbook_index.json`, a pre-generated ISO-3166 → Factbook-file map
+(regenerate with `python scripts/build_factbook_index.py` if the mirror ever
+reorganizes).
+
+**AgentHog tracing (optional):** set `AGENTOS_API_KEY` and
+`AGENTOS_WORKSPACE_ID` in `.env` (easiest: run `agenthog init`, which prompts
+for both and writes a gitignored `.env`) and every run is traced to
+[theagentos.space](https://www.theagentos.space) — one `task_run` per country
+lookup, with `resolve_country`, `fetch_world_bank_indicator`,
+`fetch_factbook_religions` tool steps and the Llama call nested inside it.
+Check traces at [app.theagentos.space/traces](https://app.theagentos.space/traces).
+Leave the vars unset and the agent runs exactly as before, sending nothing.
+
+The explanation step calls `meta/llama-3.1-8b-instruct` through NVIDIA's
+OpenAI-compatible API — set `NVIDIA_API_KEY` in `.env` (free keys at
+[build.nvidia.com](https://build.nvidia.com)). To serve the model yourself
+(local NIM, vLLM, …), point `LLM_BASE_URL` at your endpoint instead. If no key
+is set or the model call fails, the retrieved data still prints — only the
+explanation paragraph is skipped.
+
+Verification status from this sandbox: the Factbook religion lookup and
+country resolution were exercised live end-to-end; the World Bank calls and
+the NVIDIA endpoint are blocked by the sandbox's network policy, so those
+paths were verified with mocked HTTP responses — test them against the real
+APIs on your machine.
