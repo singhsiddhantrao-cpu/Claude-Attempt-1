@@ -4,9 +4,15 @@ sqlalchemy>=2.0.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 python-dotenv>=1.0.0
+python-multipart>=0.0.9        # required by AgentOS's form routes
 opentelemetry-api>=1.20.0
 opentelemetry-sdk>=1.20.0
 openinference-instrumentation-agno>=0.1.0
+
+# Required by the multi-agent stock analysis service (stock_service.py):
+# free market data, news, and deterministic technical indicators.
+yfinance>=0.2.40
+pandas>=2.0.0
 
 # Only required by claude_code_agent_service.py (wraps Claude Code itself
 # as an AgentOS agent). Omit if you only need app.py.
