@@ -149,6 +149,12 @@ uvicorn stock_service:app --port 7779
 # connect https://os.agno.com to http://localhost:7779 for live traces
 ```
 
+**Windows one-click:** instead of the commands above, just double-click **`run.bat`**
+in the project folder. It creates the virtualenv, installs dependencies, prompts you
+for your Anthropic API key (opening `.env` in Notepad), starts the server, and opens
+your browser at http://localhost:7779. Keep the window open while you use the app;
+press Ctrl+C to stop. (It still needs Python 3.11+ installed with "Add Python to PATH".)
+
 The React/Vite SPA (`frontend/`) is served as static files by the same FastAPI app —
 one process, one port. The built bundle in `frontend/dist` is committed so the repo
 runs without Node; rebuild it after any UI change. For frontend hot-reload during
