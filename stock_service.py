@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Type, TypeVar, Union
 
 from agno.db.sqlite import SqliteDb
 from agno.os import AgentOS
@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ValidationError
 
 from stock_analysis.agents import (
     build_intake_agent,
@@ -45,6 +46,7 @@ from stock_analysis.schemas import (
     AnalyzeNotFound,
     AnalyzeRequest,
     AnalystVerdict,
+    FinalReport,
     IntakeResult,
     Profile,
 )
@@ -98,14 +100,43 @@ app: FastAPI = base_app
 
 # --- Pipeline steps ---------------------------------------------------------
 
+_T = TypeVar("_T", bound=BaseModel)
+
+
+def _coerce(content, model_cls: Type[_T]) -> _T:
+    """Turn an agent's output into ``model_cls``, whatever shape it arrived in.
+
+    Agno usually parses ``output_schema`` into the Pydantic model for us, but if
+    the model replies with slightly-off JSON (or prose wrapping JSON) it silently
+    leaves ``content`` as a raw string. We handle every case here so a stray
+    string can't crash the pipeline: already-a-model, a dict, clean JSON, or JSON
+    embedded in surrounding text.
+    """
+    if isinstance(content, model_cls):
+        return content
+    if isinstance(content, dict):
+        return model_cls.model_validate(content)
+    if isinstance(content, str):
+        text = content.strip()
+        try:
+            return model_cls.model_validate_json(text)
+        except (ValidationError, ValueError):
+            start, end = text.find("{"), text.rfind("}")
+            if start != -1 and end > start:
+                return model_cls.model_validate_json(text[start : end + 1])
+    raise ValueError(
+        f"The model did not return valid {model_cls.__name__} data. "
+        f"Got {type(content).__name__}: {str(content)[:200]}"
+    )
+
 
 async def _run_intake(question: str) -> IntakeResult:
     output = await intake_agent.arun(question)
-    result = output.content
-    if not isinstance(result, IntakeResult):
-        # Defensive: fall back to treating the whole question as one company.
+    try:
+        return _coerce(output.content, IntakeResult)
+    except (ValidationError, ValueError):
+        # Fall back to treating the whole question as one company mention.
         return IntakeResult(companies=[question])
-    return result
 
 
 async def _run_technical(indicator_summary: str, name: str) -> AnalystVerdict:
@@ -115,7 +146,7 @@ async def _run_technical(indicator_summary: str, name: str) -> AnalystVerdict:
         "Give your independent technical verdict."
     )
     output = await technical_agent.arun(prompt)
-    return output.content
+    return _coerce(output.content, AnalystVerdict)
 
 
 async def _run_sentiment(headlines: str, name: str) -> AnalystVerdict:
@@ -125,7 +156,7 @@ async def _run_sentiment(headlines: str, name: str) -> AnalystVerdict:
         "Give your independent news-sentiment verdict."
     )
     output = await sentiment_agent.arun(prompt)
-    return output.content
+    return _coerce(output.content, AnalystVerdict)
 
 
 async def _run_manager(
@@ -168,7 +199,7 @@ async def _run_manager(
         "Synthesize these into your final research report."
     )
     output = await manager_agent.arun(prompt)
-    return output.content
+    return _coerce(output.content, FinalReport)
 
 
 def _profile_from_intake(intake: IntakeResult) -> Profile:
@@ -226,6 +257,22 @@ async def _analyze_ticker(
 
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
+    # Wrap the whole pipeline so an unexpected failure (bad model output, a
+    # yfinance hiccup, an API error) comes back as a readable message the SPA can
+    # show, instead of an opaque HTTP 500. The full traceback still prints to the
+    # server console for debugging.
+    try:
+        return await _handle_analyze(req)
+    except Exception as exc:
+        import traceback
+
+        traceback.print_exc()
+        return JSONResponse(
+            {"status": "error", "message": f"Analysis failed: {exc}"}
+        )
+
+
+async def _handle_analyze(req: AnalyzeRequest):
     # Fast path: the user already picked a ticker from the disambiguation list.
     if req.ticker:
         profile = _profile_from_intake(await _run_intake(req.question))

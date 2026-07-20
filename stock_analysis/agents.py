@@ -28,6 +28,7 @@ def build_intake_agent(db=None) -> Agent:
         model=Claude(id=ANALYST_MODEL),
         db=db,
         output_schema=IntakeResult,
+        use_json_mode=True,
         description="You extract structured intent from an investor's free-text question.",
         instructions=[
             "Identify every company or ticker the user mentions, in order.",
@@ -73,6 +74,7 @@ def build_technical_agent(db=None) -> Agent:
         model=Claude(id=ANALYST_MODEL),
         db=db,
         output_schema=AnalystVerdict,
+        use_json_mode=True,
         description="You read pre-computed technical indicators and give a directional verdict.",
         instructions=TECHNICAL_INSTRUCTIONS,
     )
@@ -84,6 +86,7 @@ def build_sentiment_agent(db=None) -> Agent:
         model=Claude(id=ANALYST_MODEL),
         db=db,
         output_schema=AnalystVerdict,
+        use_json_mode=True,
         description="You read recent news headlines and give a sentiment verdict.",
         instructions=SENTIMENT_INSTRUCTIONS,
     )
@@ -116,6 +119,7 @@ def build_manager_agent(db=None) -> Agent:
         model=Claude(id=MANAGER_MODEL),
         db=db,
         output_schema=FinalReport,
+        use_json_mode=True,
         description="You synthesize analyst verdicts into a final investment-research report.",
         instructions=MANAGER_INSTRUCTIONS,
     )

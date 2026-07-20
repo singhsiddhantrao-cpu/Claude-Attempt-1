@@ -296,6 +296,14 @@ Done:
 - ✅ `requirements.txt` updated (`yfinance`, `pandas`, `python-multipart`); `.gitignore`
   now excludes `node_modules/`.
 
+- ✅ **Structured-output crash FIXED.** Live runs hit `AttributeError: 'str' object
+  has no attribute 'signal'` — Agno left an analyst's reply as a raw string when its
+  JSON didn't parse cleanly. Fixed by (a) `use_json_mode=True` on all four agents, and
+  (b) a `_coerce()` helper in `stock_service.py` that turns model output into the target
+  Pydantic model whether it arrives as a model, dict, JSON string, or JSON-in-prose. The
+  `/api/analyze` route is now wrapped so any failure returns `{status:"error", message}`
+  (shown in the SPA) instead of a bare HTTP 500. Covered by tests in `tests/test_service.py`.
+
 Remaining:
 - [ ] Commit + push to `claude/multi-agent-stock-analysis-2wdq73` (in progress).
 - [ ] (Optional, needs real network + API key) smoke-test one real query end to end on an

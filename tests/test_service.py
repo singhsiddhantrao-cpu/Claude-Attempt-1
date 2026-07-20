@@ -170,6 +170,47 @@ class AnalyzeRouteTests(unittest.TestCase):
         search.assert_not_called()  # ticker provided -> no resolution search
 
 
+class CoerceAndErrorTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(svc.app)
+
+    def test_coerce_accepts_model_dict_and_json(self):
+        v = AnalystVerdict(signal="bullish", confidence=0.5, summary="x")
+        self.assertIs(svc._coerce(v, AnalystVerdict), v)
+        self.assertEqual(
+            svc._coerce({"signal": "bearish", "confidence": 0.3, "summary": "y"}, AnalystVerdict).signal,
+            "bearish",
+        )
+        self.assertEqual(
+            svc._coerce('{"signal":"neutral","confidence":0.4,"summary":"z"}', AnalystVerdict).signal,
+            "neutral",
+        )
+        # JSON embedded in surrounding prose (the exact failure mode we hit live).
+        self.assertEqual(
+            svc._coerce('Sure:\n{"signal":"bullish","confidence":0.9,"summary":"w"} done', AnalystVerdict).confidence,
+            0.9,
+        )
+
+    def test_coerce_raises_on_garbage(self):
+        with self.assertRaises(ValueError):
+            svc._coerce("this is not json at all", AnalystVerdict)
+
+    def test_pipeline_exception_becomes_error_status_not_500(self):
+        # An agent blowing up should surface as a readable message, not HTTP 500.
+        boom = mock.MagicMock()
+
+        async def _raise(*_a, **_k):
+            raise RuntimeError("model exploded")
+
+        boom.arun = _raise
+        with mock.patch.object(svc, "intake_agent", boom):
+            r = self.client.post("/api/analyze", json={"question": "Apple?"})
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["status"], "error")
+        self.assertIn("model exploded", body["message"])
+
+
 class StaticServingTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(svc.app)
