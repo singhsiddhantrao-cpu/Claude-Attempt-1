@@ -53,31 +53,32 @@ if not exist ".venv\.deps-installed" (
     echo.
 )
 
-REM --- 5. Make sure .env exists and has an API key ------------------------
-if not exist ".env" (
-    copy ".env.example" ".env" >nul
-    echo.
-    echo A new .env file was created for your Anthropic API key.
-    echo Notepad will open - paste your key after  ANTHROPIC_API_KEY=  then Save and close.
-    echo   ^(Get a key at https://console.anthropic.com  ->  Settings  ->  API Keys^)
-    echo.
-    pause
-    notepad ".env"
+REM --- 5. Make sure .env exists and has a key ------------------------------
+REM No Notepad, no encoding traps: we read the key here and write .env ourselves.
+if not exist ".env" copy ".env.example" ".env" >nul
+
+set "HASKEY="
+for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
+    if /i "%%A"=="ANTHROPIC_API_KEY" if not "%%B"=="" set "HASKEY=1"
 )
 
-findstr /r /c:"ANTHROPIC_API_KEY=sk-" ".env" >nul 2>nul
-if errorlevel 1 (
+if not defined HASKEY (
     echo.
-    echo [WARNING] No Anthropic API key detected in .env.
-    echo Opening it - paste your key after  ANTHROPIC_API_KEY=  then Save and close.
-    pause
-    notepad ".env"
-    findstr /r /c:"ANTHROPIC_API_KEY=sk-" ".env" >nul 2>nul
-    if errorlevel 1 (
-        echo [ERROR] Still no key found. Edit .env, then run this script again.
+    echo ------------------------------------------------------------
+    echo  Your Anthropic API key is needed. It starts with  sk-ant-
+    echo  Get one at  https://console.anthropic.com  ^> Settings ^> API Keys
+    echo ------------------------------------------------------------
+    set /p "APIKEY=Paste your key here and press Enter: "
+    if "!APIKEY!"=="" (
+        echo [ERROR] No key entered. Run this script again and paste your key.
         pause
         exit /b 1
     )
+    > ".env" echo ANTHROPIC_API_KEY=!APIKEY!
+    >> ".env" echo AGENTOS_API_KEY=
+    >> ".env" echo AGENTOS_AGENT_ID=
+    echo Key saved. Continuing...
+    echo.
 )
 
 REM --- 6. Warn if the frontend build is missing ---------------------------
