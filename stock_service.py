@@ -118,6 +118,17 @@ def _coerce(content, model_cls: Type[_T]) -> _T:
         return model_cls.model_validate(content)
     if isinstance(content, str):
         text = content.strip()
+        # The model layer sometimes hands back an Anthropic API *error* payload
+        # (e.g. {'type': 'error', 'error': {...}}) instead of an answer. Surface
+        # that verbatim -- it's the real problem (no credit, bad key, model not
+        # available), not a parsing bug.
+        if "'type': 'error'" in text or '"type": "error"' in text:
+            print(f"[analyze] Anthropic API error in agent output: {text}")
+            raise ValueError(
+                "The Anthropic API returned an error instead of an analysis. This "
+                "usually means the account is out of credit, the API key is invalid, "
+                "or the model isn't available to your account. Full error: " + text
+            )
         try:
             return model_cls.model_validate_json(text)
         except (ValidationError, ValueError):

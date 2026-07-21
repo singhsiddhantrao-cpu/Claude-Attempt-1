@@ -13,13 +13,18 @@ AgentOS in ``stock_service.py`` for tracing.
 
 from __future__ import annotations
 
+import os
+
 from agno.agent import Agent
 from agno.models.anthropic import Claude
 
 from stock_analysis.schemas import AnalystVerdict, FinalReport, IntakeResult
 
-ANALYST_MODEL = "claude-sonnet-5"
-MANAGER_MODEL = "claude-opus-4-8"
+# Model IDs are overridable via .env so you can switch to a model your Anthropic
+# account has access to (e.g. ANALYST_MODEL=claude-3-5-sonnet-latest) without
+# editing code. Defaults are the latest Sonnet/Opus.
+ANALYST_MODEL = os.getenv("ANALYST_MODEL", "claude-sonnet-5")
+MANAGER_MODEL = os.getenv("MANAGER_MODEL", "claude-opus-4-8")
 
 
 def build_intake_agent(db=None) -> Agent:
