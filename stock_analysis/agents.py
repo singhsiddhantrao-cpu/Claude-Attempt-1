@@ -17,8 +17,15 @@ import os
 
 from agno.agent import Agent
 from agno.models.anthropic import Claude
+from dotenv import load_dotenv
 
 from stock_analysis.schemas import AnalystVerdict, FinalReport, IntakeResult
+
+# Load .env here too: this module reads provider settings from the environment at
+# import time, and it may be imported before the app calls load_dotenv() itself.
+# Without this, a key set only in .env (e.g. NVIDIA_API_KEY) would be missed and
+# the app would silently fall back to the default provider.
+load_dotenv()
 
 # --- Provider selection -----------------------------------------------------
 # Set NVIDIA_API_KEY in .env to use NVIDIA's free OpenAI-compatible endpoint
