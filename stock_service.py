@@ -105,7 +105,25 @@ app: FastAPI = base_app
 
 # --- Pipeline steps ---------------------------------------------------------
 
+# Hard per-call ceiling (seconds). Even if the model client's own timeout/retry
+# misbehaves, this aborts a stuck agent call and returns a readable message
+# instead of the request hanging forever. Overridable via .env.
+_CALL_TIMEOUT = float(os.getenv("AGENT_TIMEOUT_SECONDS", "90"))
+
 _T = TypeVar("_T", bound=BaseModel)
+
+
+async def _arun(agent, prompt):
+    """Run one agent with a hard timeout so a stuck call can't hang the request."""
+    try:
+        return await asyncio.wait_for(agent.arun(prompt), timeout=_CALL_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise ValueError(
+            f"A model call took longer than {_CALL_TIMEOUT:.0f}s and was aborted -- "
+            "usually free-tier rate limiting or an overloaded model. Wait a few "
+            "seconds and try again, or set a faster model in .env "
+            "(e.g. ANALYST_MODEL=meta/llama-3.1-8b-instruct)."
+        )
 
 
 def _coerce(content, model_cls: Type[_T]) -> _T:
@@ -147,7 +165,7 @@ def _coerce(content, model_cls: Type[_T]) -> _T:
 
 
 async def _run_intake(question: str) -> IntakeResult:
-    output = await intake_agent.arun(question)
+    output = await _arun(intake_agent, question)
     try:
         return _coerce(output.content, IntakeResult)
     except (ValidationError, ValueError):
@@ -161,7 +179,7 @@ async def _run_technical(indicator_summary: str, name: str) -> AnalystVerdict:
         f"Pre-computed technical indicators (1-year daily data):\n{indicator_summary}\n\n"
         "Give your independent technical verdict."
     )
-    output = await technical_agent.arun(prompt)
+    output = await _arun(technical_agent, prompt)
     return _coerce(output.content, AnalystVerdict)
 
 
@@ -171,7 +189,7 @@ async def _run_sentiment(headlines: str, name: str) -> AnalystVerdict:
         f"Recent news headlines:\n{headlines}\n\n"
         "Give your independent news-sentiment verdict."
     )
-    output = await sentiment_agent.arun(prompt)
+    output = await _arun(sentiment_agent, prompt)
     return _coerce(output.content, AnalystVerdict)
 
 
@@ -214,7 +232,7 @@ async def _run_manager(
         f"{sentiment_block}\n"
         "Synthesize these into your final research report."
     )
-    output = await manager_agent.arun(prompt)
+    output = await _arun(manager_agent, prompt)
     return _coerce(output.content, FinalReport)
 
 

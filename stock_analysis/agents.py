@@ -44,12 +44,18 @@ else:
     MANAGER_MODEL = os.getenv("MANAGER_MODEL", "claude-opus-4-8")
 
 
+# Per-request HTTP timeout (seconds) and retry cap for the model client. Keeps a
+# stuck or rate-limited free-tier call from hanging for minutes. Overridable.
+_MODEL_TIMEOUT = float(os.getenv("MODEL_TIMEOUT_SECONDS", "60"))
+_MAX_RETRIES = int(os.getenv("MODEL_MAX_RETRIES", "1"))
+
+
 def _make_model(model_id: str):
     """Build the configured chat model (NVIDIA if NVIDIA_API_KEY is set, else Claude)."""
     if _USE_NVIDIA:
         from agno.models.nvidia import Nvidia
 
-        return Nvidia(id=model_id)
+        return Nvidia(id=model_id, timeout=_MODEL_TIMEOUT, max_retries=_MAX_RETRIES)
     return Claude(id=model_id)
 
 
