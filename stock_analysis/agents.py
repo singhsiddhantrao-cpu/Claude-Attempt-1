@@ -28,15 +28,18 @@ from stock_analysis.schemas import AnalystVerdict, FinalReport, IntakeResult
 load_dotenv()
 
 # --- Provider selection -----------------------------------------------------
-# Set NVIDIA_API_KEY in .env to use NVIDIA's free OpenAI-compatible endpoint
-# (build.nvidia.com) instead of Anthropic. If it's set, both tiers use NVIDIA
-# models; otherwise the app uses Claude with your ANTHROPIC_API_KEY.
-#
-# Model IDs are overridable via ANALYST_MODEL / MANAGER_MODEL in .env for either
-# provider.
-_USE_NVIDIA = bool(os.getenv("NVIDIA_API_KEY"))
+# The provider is chosen by which key is present in .env, in priority order:
+#   1. GOOGLE_API_KEY  -> Google Gemini    (free tier, https://aistudio.google.com)
+#   2. NVIDIA_API_KEY  -> NVIDIA NIM        (free tier, https://build.nvidia.com)
+#   3. ANTHROPIC_API_KEY -> Claude          (needs prepaid credit)
+# Model IDs are overridable via ANALYST_MODEL / MANAGER_MODEL for any provider.
+_USE_GOOGLE = bool(os.getenv("GOOGLE_API_KEY"))
+_USE_NVIDIA = bool(os.getenv("NVIDIA_API_KEY")) and not _USE_GOOGLE
 
-if _USE_NVIDIA:
+if _USE_GOOGLE:
+    ANALYST_MODEL = os.getenv("ANALYST_MODEL", "gemini-2.0-flash")
+    MANAGER_MODEL = os.getenv("MANAGER_MODEL", "gemini-2.5-flash")
+elif _USE_NVIDIA:
     ANALYST_MODEL = os.getenv("ANALYST_MODEL", "meta/llama-3.3-70b-instruct")
     MANAGER_MODEL = os.getenv("MANAGER_MODEL", "meta/llama-3.3-70b-instruct")
 else:
@@ -51,7 +54,11 @@ _MAX_RETRIES = int(os.getenv("MODEL_MAX_RETRIES", "1"))
 
 
 def _make_model(model_id: str):
-    """Build the configured chat model (NVIDIA if NVIDIA_API_KEY is set, else Claude)."""
+    """Build the configured chat model based on which provider key is set."""
+    if _USE_GOOGLE:
+        from agno.models.google import Gemini
+
+        return Gemini(id=model_id, timeout=_MODEL_TIMEOUT)
     if _USE_NVIDIA:
         from agno.models.nvidia import Nvidia
 

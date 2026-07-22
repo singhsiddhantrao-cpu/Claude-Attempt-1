@@ -138,18 +138,23 @@ manager is told so (no hallucinated sentiment). Every agent run is traced via Ag
 **Design note:** by design this is a *technicals + news-sentiment* view only — it does
 **not** analyze fundamentals (earnings, valuation, debt). The report says so explicitly.
 
-### Model provider (Anthropic or NVIDIA free tier)
+### Model provider (Google / NVIDIA free tiers, or Anthropic)
 
-Set **one** provider key in `.env`:
+Set **one** provider key in `.env`. Priority when several are set:
+**Google > NVIDIA > Anthropic**.
 
-- `ANTHROPIC_API_KEY` — Claude (`claude-sonnet-5` analysts, `claude-opus-4-8`
-  manager). Requires prepaid credit on the Anthropic account.
+- `GOOGLE_API_KEY` — Google **Gemini**, **free** tier
+  ([aistudio.google.com](https://aistudio.google.com), key starts `AIza`).
+  Fast and generous — best fit for this pipeline. Defaults: `gemini-2.0-flash`
+  (analysts) / `gemini-2.5-flash` (manager). Needs `google-genai`.
 - `NVIDIA_API_KEY` — NVIDIA's **free** OpenAI-compatible endpoint
-  ([build.nvidia.com](https://build.nvidia.com), key starts `nvapi-`). When set,
-  the app uses it automatically (`meta/llama-3.3-70b-instruct` for both tiers) —
-  no Anthropic credit needed. Needs the `openai` package (in `requirements.txt`).
+  ([build.nvidia.com](https://build.nvidia.com), key starts `nvapi-`). Default
+  `meta/llama-3.3-70b-instruct` for both tiers. Needs `openai`. (Free tier can
+  be slow/rate-limited under bursts.)
+- `ANTHROPIC_API_KEY` — Claude (`claude-sonnet-5` / `claude-opus-4-8`). Requires
+  prepaid credit on the Anthropic account.
 
-Override model IDs for either provider with `ANALYST_MODEL` / `MANAGER_MODEL`.
+Override model IDs for the chosen provider with `ANALYST_MODEL` / `MANAGER_MODEL`.
 
 ### Run
 

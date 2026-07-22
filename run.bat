@@ -53,12 +53,18 @@ if not exist ".venv\.deps-installed" (
     echo.
 )
 
-REM Ensure the OpenAI client is present (needed for NVIDIA's free models). This
-REM covers setups whose deps were installed before openai was added.
+REM Ensure the provider client libraries are present (needed for the free
+REM providers). Covers setups whose deps were installed before these were added.
 python -c "import openai" 2>nul
 if errorlevel 1 (
     echo Installing the openai client for NVIDIA support...
     python -m pip install openai
+    echo.
+)
+python -c "import google.genai" 2>nul
+if errorlevel 1 (
+    echo Installing the google-genai client for Google Gemini support...
+    python -m pip install google-genai
     echo.
 )
 
@@ -71,16 +77,18 @@ set "HASKEY="
 for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
     if /i "%%A"=="ANTHROPIC_API_KEY" if not "%%B"=="" set "HASKEY=1"
     if /i "%%A"=="NVIDIA_API_KEY" if not "%%B"=="" set "HASKEY=1"
+    if /i "%%A"=="GOOGLE_API_KEY" if not "%%B"=="" set "HASKEY=1"
 )
 
 if not defined HASKEY (
     echo.
     echo ------------------------------------------------------------
-    echo  A model provider key is needed. Two options:
-    echo    1^) NVIDIA  ^(free^) - get one at https://build.nvidia.com  ^(nvapi-...^)
-    echo    2^) Anthropic       - https://console.anthropic.com ^(sk-ant-..., needs credit^)
-    echo  To use NVIDIA instead, press Enter here, then put your nvapi- key on the
-    echo  NVIDIA_API_KEY= line in the .env file and run this script again.
+    echo  A model provider key is needed. Free options:
+    echo    1^) Google Gemini ^(free^) - https://aistudio.google.com  ^(AIza...^)
+    echo    2^) NVIDIA        ^(free^) - https://build.nvidia.com     ^(nvapi-...^)
+    echo    3^) Anthropic            - https://console.anthropic.com ^(sk-ant-..., needs credit^)
+    echo  For a FREE option, press Enter here, then put your key on the matching
+    echo  line ^(GOOGLE_API_KEY= or NVIDIA_API_KEY=^) in the .env file and re-run.
     echo ------------------------------------------------------------
     set /p "APIKEY=Paste an Anthropic (sk-ant-) key, or press Enter to skip: "
     if "!APIKEY!"=="" (
