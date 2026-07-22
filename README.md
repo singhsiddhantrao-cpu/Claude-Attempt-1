@@ -138,11 +138,24 @@ manager is told so (no hallucinated sentiment). Every agent run is traced via Ag
 **Design note:** by design this is a *technicals + news-sentiment* view only — it does
 **not** analyze fundamentals (earnings, valuation, debt). The report says so explicitly.
 
+### Model provider (Anthropic or NVIDIA free tier)
+
+Set **one** provider key in `.env`:
+
+- `ANTHROPIC_API_KEY` — Claude (`claude-sonnet-5` analysts, `claude-opus-4-8`
+  manager). Requires prepaid credit on the Anthropic account.
+- `NVIDIA_API_KEY` — NVIDIA's **free** OpenAI-compatible endpoint
+  ([build.nvidia.com](https://build.nvidia.com), key starts `nvapi-`). When set,
+  the app uses it automatically (`meta/llama-3.3-70b-instruct` for both tiers) —
+  no Anthropic credit needed. Needs the `openai` package (in `requirements.txt`).
+
+Override model IDs for either provider with `ANALYST_MODEL` / `MANAGER_MODEL`.
+
 ### Run
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env                       # set ANTHROPIC_API_KEY
+cp .env.example .env                       # set ANTHROPIC_API_KEY or NVIDIA_API_KEY
 (cd frontend && npm install && npm run build)   # first time / after UI changes
 uvicorn stock_service:app --port 7779
 # open http://localhost:7779  (the React SPA)

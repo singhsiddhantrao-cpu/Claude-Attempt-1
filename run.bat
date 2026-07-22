@@ -53,28 +53,43 @@ if not exist ".venv\.deps-installed" (
     echo.
 )
 
-REM --- 5. Make sure .env exists and has a key ------------------------------
-REM No Notepad, no encoding traps: we read the key here and write .env ourselves.
+REM Ensure the OpenAI client is present (needed for NVIDIA's free models). This
+REM covers setups whose deps were installed before openai was added.
+python -c "import openai" 2>nul
+if errorlevel 1 (
+    echo Installing the openai client for NVIDIA support...
+    python -m pip install openai
+    echo.
+)
+
+REM --- 5. Make sure .env exists and has a provider key --------------------
+REM Accept EITHER an Anthropic key or an NVIDIA key. If .env already has one of
+REM them we leave the file untouched (so a hand-edited NVIDIA_API_KEY survives).
 if not exist ".env" copy ".env.example" ".env" >nul
 
 set "HASKEY="
 for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
     if /i "%%A"=="ANTHROPIC_API_KEY" if not "%%B"=="" set "HASKEY=1"
+    if /i "%%A"=="NVIDIA_API_KEY" if not "%%B"=="" set "HASKEY=1"
 )
 
 if not defined HASKEY (
     echo.
     echo ------------------------------------------------------------
-    echo  Your Anthropic API key is needed. It starts with  sk-ant-
-    echo  Get one at  https://console.anthropic.com  ^> Settings ^> API Keys
+    echo  A model provider key is needed. Two options:
+    echo    1^) NVIDIA  ^(free^) - get one at https://build.nvidia.com  ^(nvapi-...^)
+    echo    2^) Anthropic       - https://console.anthropic.com ^(sk-ant-..., needs credit^)
+    echo  To use NVIDIA instead, press Enter here, then put your nvapi- key on the
+    echo  NVIDIA_API_KEY= line in the .env file and run this script again.
     echo ------------------------------------------------------------
-    set /p "APIKEY=Paste your key here and press Enter: "
+    set /p "APIKEY=Paste an Anthropic (sk-ant-) key, or press Enter to skip: "
     if "!APIKEY!"=="" (
-        echo [ERROR] No key entered. Run this script again and paste your key.
+        echo No key entered. Edit .env, set ANTHROPIC_API_KEY= or NVIDIA_API_KEY=, then re-run.
         pause
         exit /b 1
     )
     > ".env" echo ANTHROPIC_API_KEY=!APIKEY!
+    >> ".env" echo NVIDIA_API_KEY=
     >> ".env" echo AGENTOS_API_KEY=
     >> ".env" echo AGENTOS_AGENT_ID=
     echo Key saved. Continuing...

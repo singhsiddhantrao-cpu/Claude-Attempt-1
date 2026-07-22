@@ -54,11 +54,16 @@ from stock_analysis.tools import market_data, news
 
 load_dotenv()
 
-if not os.getenv("ANTHROPIC_API_KEY"):
+if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("NVIDIA_API_KEY"):
     raise RuntimeError(
-        "ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your own "
-        "key, or export ANTHROPIC_API_KEY in your shell before running this service."
+        "No model provider key is set. Copy .env.example to .env and set EITHER "
+        "ANTHROPIC_API_KEY (Claude, needs prepaid credit) OR NVIDIA_API_KEY (free "
+        "tier from https://build.nvidia.com). NVIDIA is used automatically when its "
+        "key is present."
     )
+
+if os.getenv("NVIDIA_API_KEY"):
+    print("NVIDIA_API_KEY detected -- using NVIDIA's free models (build.nvidia.com).")
 
 # Optional: also trace to theagentos.space via agenthog (same pattern as app.py).
 if os.getenv("AGENTOS_API_KEY"):

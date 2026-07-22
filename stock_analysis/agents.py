@@ -20,17 +20,36 @@ from agno.models.anthropic import Claude
 
 from stock_analysis.schemas import AnalystVerdict, FinalReport, IntakeResult
 
-# Model IDs are overridable via .env so you can switch to a model your Anthropic
-# account has access to (e.g. ANALYST_MODEL=claude-3-5-sonnet-latest) without
-# editing code. Defaults are the latest Sonnet/Opus.
-ANALYST_MODEL = os.getenv("ANALYST_MODEL", "claude-sonnet-5")
-MANAGER_MODEL = os.getenv("MANAGER_MODEL", "claude-opus-4-8")
+# --- Provider selection -----------------------------------------------------
+# Set NVIDIA_API_KEY in .env to use NVIDIA's free OpenAI-compatible endpoint
+# (build.nvidia.com) instead of Anthropic. If it's set, both tiers use NVIDIA
+# models; otherwise the app uses Claude with your ANTHROPIC_API_KEY.
+#
+# Model IDs are overridable via ANALYST_MODEL / MANAGER_MODEL in .env for either
+# provider.
+_USE_NVIDIA = bool(os.getenv("NVIDIA_API_KEY"))
+
+if _USE_NVIDIA:
+    ANALYST_MODEL = os.getenv("ANALYST_MODEL", "meta/llama-3.3-70b-instruct")
+    MANAGER_MODEL = os.getenv("MANAGER_MODEL", "meta/llama-3.3-70b-instruct")
+else:
+    ANALYST_MODEL = os.getenv("ANALYST_MODEL", "claude-sonnet-5")
+    MANAGER_MODEL = os.getenv("MANAGER_MODEL", "claude-opus-4-8")
+
+
+def _make_model(model_id: str):
+    """Build the configured chat model (NVIDIA if NVIDIA_API_KEY is set, else Claude)."""
+    if _USE_NVIDIA:
+        from agno.models.nvidia import Nvidia
+
+        return Nvidia(id=model_id)
+    return Claude(id=model_id)
 
 
 def build_intake_agent(db=None) -> Agent:
     return Agent(
         name="intake",
-        model=Claude(id=ANALYST_MODEL),
+        model=_make_model(ANALYST_MODEL),
         db=db,
         output_schema=IntakeResult,
         use_json_mode=True,
@@ -76,7 +95,7 @@ SENTIMENT_INSTRUCTIONS = [
 def build_technical_agent(db=None) -> Agent:
     return Agent(
         name="technical-analyst",
-        model=Claude(id=ANALYST_MODEL),
+        model=_make_model(ANALYST_MODEL),
         db=db,
         output_schema=AnalystVerdict,
         use_json_mode=True,
@@ -88,7 +107,7 @@ def build_technical_agent(db=None) -> Agent:
 def build_sentiment_agent(db=None) -> Agent:
     return Agent(
         name="sentiment-analyst",
-        model=Claude(id=ANALYST_MODEL),
+        model=_make_model(ANALYST_MODEL),
         db=db,
         output_schema=AnalystVerdict,
         use_json_mode=True,
@@ -121,7 +140,7 @@ MANAGER_INSTRUCTIONS = [
 def build_manager_agent(db=None) -> Agent:
     return Agent(
         name="portfolio-manager",
-        model=Claude(id=MANAGER_MODEL),
+        model=_make_model(MANAGER_MODEL),
         db=db,
         output_schema=FinalReport,
         use_json_mode=True,

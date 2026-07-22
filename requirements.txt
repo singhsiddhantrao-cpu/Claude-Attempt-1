@@ -1,5 +1,8 @@
 agno>=2.7.0
 anthropic>=0.40.0
+# Required to use NVIDIA's free OpenAI-compatible models (set NVIDIA_API_KEY).
+# Agno's Nvidia model class talks to build.nvidia.com through the openai client.
+openai>=1.40.0
 sqlalchemy>=2.0.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
