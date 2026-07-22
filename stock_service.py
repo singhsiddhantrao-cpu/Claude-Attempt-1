@@ -55,17 +55,21 @@ from stock_analysis.tools import market_data, news
 load_dotenv()
 
 if not (
-    os.getenv("GOOGLE_API_KEY")
+    os.getenv("GROQ_API_KEY")
+    or os.getenv("GOOGLE_API_KEY")
     or os.getenv("NVIDIA_API_KEY")
     or os.getenv("ANTHROPIC_API_KEY")
 ):
     raise RuntimeError(
         "No model provider key is set. Copy .env.example to .env and set ONE of: "
-        "GOOGLE_API_KEY (free, https://aistudio.google.com), NVIDIA_API_KEY (free, "
-        "https://build.nvidia.com), or ANTHROPIC_API_KEY (Claude, needs prepaid credit)."
+        "GROQ_API_KEY (free, https://console.groq.com), GOOGLE_API_KEY (free, "
+        "https://aistudio.google.com), NVIDIA_API_KEY (free, https://build.nvidia.com), "
+        "or ANTHROPIC_API_KEY (Claude, needs prepaid credit)."
     )
 
-if os.getenv("GOOGLE_API_KEY"):
+if os.getenv("GROQ_API_KEY"):
+    print("GROQ_API_KEY detected -- using Groq's free models (console.groq.com).")
+elif os.getenv("GOOGLE_API_KEY"):
     print("GOOGLE_API_KEY detected -- using Google's free Gemini models (aistudio.google.com).")
 elif os.getenv("NVIDIA_API_KEY"):
     print("NVIDIA_API_KEY detected -- using NVIDIA's free models (build.nvidia.com).")

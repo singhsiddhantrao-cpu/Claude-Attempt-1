@@ -67,6 +67,12 @@ if errorlevel 1 (
     python -m pip install google-genai
     echo.
 )
+python -c "import groq" 2>nul
+if errorlevel 1 (
+    echo Installing the groq client for Groq support...
+    python -m pip install groq
+    echo.
+)
 
 REM --- 5. Make sure .env exists and has a provider key --------------------
 REM Accept EITHER an Anthropic key or an NVIDIA key. If .env already has one of
@@ -78,17 +84,19 @@ for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
     if /i "%%A"=="ANTHROPIC_API_KEY" if not "%%B"=="" set "HASKEY=1"
     if /i "%%A"=="NVIDIA_API_KEY" if not "%%B"=="" set "HASKEY=1"
     if /i "%%A"=="GOOGLE_API_KEY" if not "%%B"=="" set "HASKEY=1"
+    if /i "%%A"=="GROQ_API_KEY" if not "%%B"=="" set "HASKEY=1"
 )
 
 if not defined HASKEY (
     echo.
     echo ------------------------------------------------------------
     echo  A model provider key is needed. Free options:
-    echo    1^) Google Gemini ^(free^) - https://aistudio.google.com  ^(AIza...^)
-    echo    2^) NVIDIA        ^(free^) - https://build.nvidia.com     ^(nvapi-...^)
-    echo    3^) Anthropic            - https://console.anthropic.com ^(sk-ant-..., needs credit^)
+    echo    1^) Groq          ^(free^) - https://console.groq.com     ^(gsk_...^)  RECOMMENDED
+    echo    2^) Google Gemini ^(free^) - https://aistudio.google.com  ^(AIza...^)
+    echo    3^) NVIDIA        ^(free^) - https://build.nvidia.com     ^(nvapi-...^)
+    echo    4^) Anthropic            - https://console.anthropic.com ^(sk-ant-..., needs credit^)
     echo  For a FREE option, press Enter here, then put your key on the matching
-    echo  line ^(GOOGLE_API_KEY= or NVIDIA_API_KEY=^) in the .env file and re-run.
+    echo  line ^(GROQ_API_KEY=, GOOGLE_API_KEY=, or NVIDIA_API_KEY=^) in .env and re-run.
     echo ------------------------------------------------------------
     set /p "APIKEY=Paste an Anthropic (sk-ant-) key, or press Enter to skip: "
     if "!APIKEY!"=="" (

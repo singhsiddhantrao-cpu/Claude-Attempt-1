@@ -5,6 +5,8 @@ anthropic>=0.40.0
 openai>=1.40.0
 # Required to use Google's free Gemini models (set GOOGLE_API_KEY).
 google-genai>=0.3.0
+# Required to use Groq's free models (set GROQ_API_KEY).
+groq>=0.9.0
 sqlalchemy>=2.0.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0

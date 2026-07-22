@@ -138,15 +138,21 @@ manager is told so (no hallucinated sentiment). Every agent run is traced via Ag
 **Design note:** by design this is a *technicals + news-sentiment* view only — it does
 **not** analyze fundamentals (earnings, valuation, debt). The report says so explicitly.
 
-### Model provider (Google / NVIDIA free tiers, or Anthropic)
+### Model provider (Groq / Google / NVIDIA free tiers, or Anthropic)
 
 Set **one** provider key in `.env`. Priority when several are set:
-**Google > NVIDIA > Anthropic**.
+**Groq > Google > NVIDIA > Anthropic**.
 
+- `GROQ_API_KEY` — **Groq**, **free** tier
+  ([console.groq.com](https://console.groq.com), key starts `gsk_`). Extremely
+  fast with generous free limits — the best fit for this four-call pipeline.
+  Defaults: `llama-3.1-8b-instant` (analysts) / `llama-3.3-70b-versatile`
+  (manager). Needs the `groq` package.
 - `GOOGLE_API_KEY` — Google **Gemini**, **free** tier
   ([aistudio.google.com](https://aistudio.google.com), key starts `AIza`).
-  Fast and generous — best fit for this pipeline. Defaults: `gemini-2.0-flash`
-  (analysts) / `gemini-2.5-flash` (manager). Needs `google-genai`.
+  Defaults: `gemini-2.0-flash` (analysts) / `gemini-2.5-flash` (manager). Needs
+  `google-genai`. Note: some accounts/regions get `limit: 0` free quota (429
+  RESOURCE_EXHAUSTED) — if so, use Groq.
 - `NVIDIA_API_KEY` — NVIDIA's **free** OpenAI-compatible endpoint
   ([build.nvidia.com](https://build.nvidia.com), key starts `nvapi-`). Default
   `meta/llama-3.3-70b-instruct` for both tiers. Needs `openai`. (Free tier can

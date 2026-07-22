@@ -29,14 +29,19 @@ load_dotenv()
 
 # --- Provider selection -----------------------------------------------------
 # The provider is chosen by which key is present in .env, in priority order:
-#   1. GOOGLE_API_KEY  -> Google Gemini    (free tier, https://aistudio.google.com)
-#   2. NVIDIA_API_KEY  -> NVIDIA NIM        (free tier, https://build.nvidia.com)
-#   3. ANTHROPIC_API_KEY -> Claude          (needs prepaid credit)
+#   1. GROQ_API_KEY    -> Groq             (free tier, https://console.groq.com)
+#   2. GOOGLE_API_KEY  -> Google Gemini    (free tier, https://aistudio.google.com)
+#   3. NVIDIA_API_KEY  -> NVIDIA NIM        (free tier, https://build.nvidia.com)
+#   4. ANTHROPIC_API_KEY -> Claude          (needs prepaid credit)
 # Model IDs are overridable via ANALYST_MODEL / MANAGER_MODEL for any provider.
-_USE_GOOGLE = bool(os.getenv("GOOGLE_API_KEY"))
-_USE_NVIDIA = bool(os.getenv("NVIDIA_API_KEY")) and not _USE_GOOGLE
+_USE_GROQ = bool(os.getenv("GROQ_API_KEY"))
+_USE_GOOGLE = bool(os.getenv("GOOGLE_API_KEY")) and not _USE_GROQ
+_USE_NVIDIA = bool(os.getenv("NVIDIA_API_KEY")) and not (_USE_GROQ or _USE_GOOGLE)
 
-if _USE_GOOGLE:
+if _USE_GROQ:
+    ANALYST_MODEL = os.getenv("ANALYST_MODEL", "llama-3.1-8b-instant")
+    MANAGER_MODEL = os.getenv("MANAGER_MODEL", "llama-3.3-70b-versatile")
+elif _USE_GOOGLE:
     ANALYST_MODEL = os.getenv("ANALYST_MODEL", "gemini-2.0-flash")
     MANAGER_MODEL = os.getenv("MANAGER_MODEL", "gemini-2.5-flash")
 elif _USE_NVIDIA:
@@ -55,6 +60,10 @@ _MAX_RETRIES = int(os.getenv("MODEL_MAX_RETRIES", "1"))
 
 def _make_model(model_id: str):
     """Build the configured chat model based on which provider key is set."""
+    if _USE_GROQ:
+        from agno.models.groq import Groq
+
+        return Groq(id=model_id, timeout=_MODEL_TIMEOUT, max_retries=_MAX_RETRIES)
     if _USE_GOOGLE:
         from agno.models.google import Gemini
 
