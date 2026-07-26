@@ -133,6 +133,15 @@ app: FastAPI = base_app
 # instead of the request hanging forever. Overridable via .env.
 _CALL_TIMEOUT = float(os.getenv("AGENT_TIMEOUT_SECONDS", "90"))
 
+# Which tier of the architecture each agent belongs to. Recorded on the trace so
+# the dashboard shows the pipeline's shape, not just four interchangeable calls.
+_TIERS = {
+    "intake": "tier0-intake",
+    "technical-analyst": "tier2-analyst",
+    "sentiment-analyst": "tier2-analyst",
+    "portfolio-manager": "tier3-manager",
+}
+
 _T = TypeVar("_T", bound=BaseModel)
 
 
@@ -152,26 +161,60 @@ def _trace_llm_call(agent, prompt, output, started, error=None):
     model = getattr(agent.model, "id", "unknown")
     provider = type(agent.model).__name__.lower()
     metrics = getattr(output, "metrics", None) if output is not None else None
+    content = str(output.content) if output is not None else None
+    # Each agent gets its own agent_id so the dashboard's agent filter and
+    # Agent Graph can tell the four tiers apart, rather than lumping every call
+    # under one id.
+    role_agent_id = f"{AGENT_ID}.{agent.name}"
+
+    if error is None:
+        status = "success"
+    elif error.get("type") == "timeout":
+        status = "timeout"
+    else:
+        status = "error"
+
+    client = agenthog.get_default_client()
+    # A child span keeps this agent's events grouped together under the run.
+    # The two emits are guarded separately so a rejected field in one can never
+    # swallow the other -- the failure mode that first hid these traces.
     try:
-        agenthog.get_default_client().log_llm_call(
-            model=model,
-            system=provider,
-            input=[{"role": "user", "content": str(prompt)}],
-            output=(
-                [{"role": "assistant", "content": str(output.content)}]
-                if output is not None
-                else None
-            ),
-            input_tokens=getattr(metrics, "input_tokens", None),
-            output_tokens=getattr(metrics, "output_tokens", None),
-            total_tokens=getattr(metrics, "total_tokens", None),
-            duration_ms=duration_ms,
-            error=error,
-            agent_id=AGENT_ID,
-            agent_role=agent.name,
-        )
+        with agenthog.start_span(agent.name, kind="agent"):
+            # LLM spans are labelled by model name, so four agents sharing a
+            # model look identical. This named tool_call span carries the
+            # agent's role as its label, with the llm_call alongside it.
+            try:
+                client.log_tool_call(
+                    name=agent.name,
+                    input={"prompt": str(prompt)[:4000]},
+                    output={"response": content[:4000]} if content else None,
+                    status=status,
+                    duration_ms=duration_ms,
+                    error=error,
+                    agent_id=role_agent_id,
+                )
+            except Exception as exc:
+                print(f"[trace] tool_call span failed for {agent.name}: {exc}")
+
+            try:
+                client.log_llm_call(
+                    model=model,
+                    system=provider,
+                    input=[{"role": "user", "content": str(prompt)}],
+                    output=[{"role": "assistant", "content": content}] if content else None,
+                    input_tokens=getattr(metrics, "input_tokens", None),
+                    output_tokens=getattr(metrics, "output_tokens", None),
+                    total_tokens=getattr(metrics, "total_tokens", None),
+                    duration_ms=duration_ms,
+                    error=error,
+                    agent_id=role_agent_id,
+                    agent_role=agent.name,
+                    agent_tier=_TIERS.get(agent.name, "unknown"),
+                )
+            except Exception as exc:
+                print(f"[trace] llm_call span failed for {agent.name}: {exc}")
     except Exception as exc:  # never let tracing break the analysis
-        print(f"[trace] could not log llm call for {agent.name}: {exc}")
+        print(f"[trace] could not log run for {agent.name}: {exc}")
 
 
 async def _arun(agent, prompt):
