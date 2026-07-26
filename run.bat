@@ -25,22 +25,41 @@ if not defined PY (
 echo Using Python: %PY%
 echo.
 
-REM --- 2. Create the virtual environment (first run only) ------------------
-if not exist ".venv\Scripts\activate.bat" (
-    echo Creating virtual environment ^(.venv^) ...
-    %PY% -m venv .venv
+REM --- 2. Create the virtual environment ------------------------------------
+REM The venv lives OUTSIDE the project folder, at a deliberately short path
+REM (%LOCALAPPDATA%\msa-venv). Some packages ship very long file names, and a
+REM venv inside a deeply-nested folder (e.g. an unzipped download sitting in
+REM Downloads) pushes them past Windows' 260-character path limit, which makes
+REM pip fail with "No such file or directory". Keeping the venv short means the
+REM project itself can be extracted and run from anywhere.
+set "VENV=%LOCALAPPDATA%\msa-venv"
+if not defined LOCALAPPDATA set "VENV=%SystemDrive%\msa-venv"
+
+if not exist "%VENV%\Scripts\activate.bat" (
+    echo Creating virtual environment at:
+    echo   %VENV%
+    %PY% -m venv "%VENV%"
     if errorlevel 1 (
         echo [ERROR] Could not create the virtual environment.
         pause
         exit /b 1
     )
+    echo.
+)
+
+REM A .venv from an older version of this script may still sit in the project
+REM folder. It is no longer used and can be deleted to reclaim disk space.
+if exist ".venv\Scripts\activate.bat" (
+    echo [note] An old .venv folder exists inside this project and is no longer
+    echo        used. You can safely delete it to free up disk space.
+    echo.
 )
 
 REM --- 3. Activate it -------------------------------------------------------
-call ".venv\Scripts\activate.bat"
+call "%VENV%\Scripts\activate.bat"
 
 REM --- 4. Install dependencies (first run, or after requirements change) ---
-if not exist ".venv\.deps-installed" (
+if not exist "%VENV%\.deps-installed" (
     echo Installing dependencies. The first time this can take a few minutes...
     python -m pip install --upgrade pip
     python -m pip install -r requirements.txt
@@ -49,7 +68,7 @@ if not exist ".venv\.deps-installed" (
         pause
         exit /b 1
     )
-    echo installed > ".venv\.deps-installed"
+    echo installed > "%VENV%\.deps-installed"
     echo.
 )
 

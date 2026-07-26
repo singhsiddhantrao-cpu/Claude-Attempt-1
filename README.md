@@ -174,10 +174,18 @@ uvicorn stock_service:app --port 7779
 ```
 
 **Windows one-click:** instead of the commands above, just double-click **`run.bat`**
-in the project folder. It creates the virtualenv, installs dependencies, prompts you
-for your Anthropic API key (opening `.env` in Notepad), starts the server, and opens
-your browser at http://localhost:7779. Keep the window open while you use the app;
-press Ctrl+C to stop. (It still needs Python 3.11+ installed with "Add Python to PATH".)
+in the project folder — extract the download anywhere (Downloads is fine) and run it
+there. It creates the virtualenv, installs dependencies, asks for your API key, starts
+the server, and opens your browser at http://localhost:7779. Keep the window open while
+you use the app; press Ctrl+C to stop. (It needs Python 3.11+ installed with "Add
+Python to PATH".)
+
+The virtualenv is created at `%LOCALAPPDATA%\msa-venv`, **outside** the project folder.
+That is deliberate: some dependencies ship very long file names, and a venv nested
+inside an unzipped download can exceed Windows' 260-character path limit, making `pip`
+fail with `No such file or directory`. Keeping the venv at a short path means the
+project runs from wherever you extracted it. (It also means the environment is reused
+across re-downloads, so subsequent setups are fast.)
 
 The React/Vite SPA (`frontend/`) is served as static files by the same FastAPI app —
 one process, one port. The built bundle in `frontend/dist` is committed so the repo
