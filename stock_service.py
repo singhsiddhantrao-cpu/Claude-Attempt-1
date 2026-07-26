@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from pathlib import Path
 from typing import Optional, Type, TypeVar, Union
 
@@ -34,14 +35,19 @@ from dotenv import load_dotenv
 # already-built clients keep their unpatched methods and nothing is traced.
 load_dotenv()
 
-if os.getenv("AGENTOS_API_KEY"):
-    import agenthog
+agenthog = None
+AGENT_ID = os.getenv("AGENTOS_AGENT_ID", "stock-analysis")
 
-    agenthog.init(agent_id=os.getenv("AGENTOS_AGENT_ID", "stock-analysis"))
+if os.getenv("AGENTOS_API_KEY"):
+    import agenthog as _agenthog
+
+    agenthog = _agenthog
+    agenthog.init(agent_id=AGENT_ID)
     _traced = agenthog.autoinstrument()
     print(
-        f"AGENTOS_API_KEY detected -- tracing to theagentos.space "
-        f"(instrumented: {', '.join(_traced) or 'none'})."
+        f"AGENTOS_API_KEY detected -- tracing to theagentos.space as '{AGENT_ID}' "
+        f"(auto-instrumented: {', '.join(_traced) or 'none'}; agent calls are also "
+        f"traced explicitly)."
     )
 else:
     print(
@@ -130,17 +136,66 @@ _CALL_TIMEOUT = float(os.getenv("AGENT_TIMEOUT_SECONDS", "90"))
 _T = TypeVar("_T", bound=BaseModel)
 
 
+def _trace_llm_call(agent, prompt, output, started, error=None):
+    """Emit an agent.llm_call event to theagentos.space for one agent run.
+
+    We trace explicitly rather than relying on agenthog's auto-instrumentation:
+    its httpx hook deliberately skips requests carrying x-stainless-* headers
+    (assuming a dedicated vendor integration covers them), and Groq's SDK sends
+    those headers but has no such integration -- so Groq calls would otherwise
+    be captured by nothing. Doing it here also makes the trace provider-agnostic
+    and lets us label each span with the agent's role.
+    """
+    if agenthog is None:
+        return
+    duration_ms = (time.perf_counter() - started) * 1000
+    model = getattr(agent.model, "id", "unknown")
+    provider = type(agent.model).__name__.lower()
+    metrics = getattr(output, "metrics", None) if output is not None else None
+    try:
+        agenthog.get_default_client().log_llm_call(
+            model=model,
+            system=provider,
+            input=[{"role": "user", "content": str(prompt)}],
+            output=(
+                [{"role": "assistant", "content": str(output.content)}]
+                if output is not None
+                else None
+            ),
+            input_tokens=getattr(metrics, "input_tokens", None),
+            output_tokens=getattr(metrics, "output_tokens", None),
+            total_tokens=getattr(metrics, "total_tokens", None),
+            duration_ms=duration_ms,
+            error=error,
+            agent_id=AGENT_ID,
+            agent_role=agent.name,
+        )
+    except Exception as exc:  # never let tracing break the analysis
+        print(f"[trace] could not log llm call for {agent.name}: {exc}")
+
+
 async def _arun(agent, prompt):
     """Run one agent with a hard timeout so a stuck call can't hang the request."""
+    started = time.perf_counter()
     try:
-        return await asyncio.wait_for(agent.arun(prompt), timeout=_CALL_TIMEOUT)
+        output = await asyncio.wait_for(agent.arun(prompt), timeout=_CALL_TIMEOUT)
     except asyncio.TimeoutError:
+        _trace_llm_call(
+            agent, prompt, None, started, error={"type": "timeout", "message": "aborted"}
+        )
         raise ValueError(
             f"A model call took longer than {_CALL_TIMEOUT:.0f}s and was aborted -- "
             "usually free-tier rate limiting or an overloaded model. Wait a few "
             "seconds and try again, or set a faster model in .env "
             "(e.g. ANALYST_MODEL=meta/llama-3.1-8b-instruct)."
         )
+    except Exception as exc:
+        _trace_llm_call(
+            agent, prompt, None, started, error={"type": type(exc).__name__, "message": str(exc)[:300]}
+        )
+        raise
+    _trace_llm_call(agent, prompt, output, started)
+    return output
 
 
 def _coerce(content, model_cls: Type[_T]) -> _T:
@@ -312,6 +367,27 @@ async def analyze(req: AnalyzeRequest):
     # yfinance hiccup, an API error) comes back as a readable message the SPA can
     # show, instead of an opaque HTTP 500. The full traceback still prints to the
     # server console for debugging.
+    if agenthog is not None:
+        # Group this analysis's four agent calls under one task_run so they show
+        # up on theagentos.space as a single trace rather than loose events.
+        with agenthog.start_task_run(agent_id=AGENT_ID):
+            try:
+                result = await _handle_analyze(req)
+            except Exception as exc:
+                import traceback
+
+                traceback.print_exc()
+                result = JSONResponse(
+                    {"status": "error", "message": f"Analysis failed: {exc}"}
+                )
+            # Ship the batch now instead of waiting for the periodic flush, so
+            # traces appear on the dashboard right after the run finishes.
+            try:
+                agenthog.flush()
+            except Exception:
+                pass
+            return result
+
     try:
         return await _handle_analyze(req)
     except Exception as exc:
