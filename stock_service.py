@@ -26,21 +26,43 @@ import os
 from pathlib import Path
 from typing import Optional, Type, TypeVar, Union
 
-from agno.db.sqlite import SqliteDb
-from agno.os import AgentOS
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ValidationError
 
-from stock_analysis.agents import (
+# Load .env and initialize agenthog FIRST -- before the model SDKs (groq, openai,
+# anthropic, httpx) are imported anywhere. agenthog patches those libraries in
+# place, so it must run before any client object is constructed, otherwise the
+# already-built clients keep their unpatched methods and nothing is traced.
+load_dotenv()
+
+if os.getenv("AGENTOS_API_KEY"):
+    import agenthog
+
+    agenthog.init(agent_id=os.getenv("AGENTOS_AGENT_ID", "stock-analysis"))
+    _traced = agenthog.autoinstrument()
+    print(
+        f"AGENTOS_API_KEY detected -- tracing to theagentos.space "
+        f"(instrumented: {', '.join(_traced) or 'none'})."
+    )
+else:
+    print(
+        "AGENTOS_API_KEY not set -- skipping agenthog instrumentation "
+        "(nothing sent to theagentos.space). See .env.example."
+    )
+
+from agno.db.sqlite import SqliteDb  # noqa: E402
+from agno.os import AgentOS  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from pydantic import BaseModel, ValidationError  # noqa: E402
+
+from stock_analysis.agents import (  # noqa: E402
     build_intake_agent,
     build_manager_agent,
     build_sentiment_agent,
     build_technical_agent,
 )
-from stock_analysis.schemas import (
+from stock_analysis.schemas import (  # noqa: E402
     AnalyzeAmbiguous,
     AnalyzeComplete,
     AnalyzeNotFound,
@@ -50,9 +72,7 @@ from stock_analysis.schemas import (
     IntakeResult,
     Profile,
 )
-from stock_analysis.tools import market_data, news
-
-load_dotenv()
+from stock_analysis.tools import market_data, news  # noqa: E402
 
 if not (
     os.getenv("GROQ_API_KEY")
@@ -73,18 +93,6 @@ elif os.getenv("GOOGLE_API_KEY"):
     print("GOOGLE_API_KEY detected -- using Google's free Gemini models (aistudio.google.com).")
 elif os.getenv("NVIDIA_API_KEY"):
     print("NVIDIA_API_KEY detected -- using NVIDIA's free models (build.nvidia.com).")
-
-# Optional: also trace to theagentos.space via agenthog (same pattern as app.py).
-if os.getenv("AGENTOS_API_KEY"):
-    import agenthog
-
-    agenthog.init(agent_id=os.getenv("AGENTOS_AGENT_ID", "stock-analysis"))
-    agenthog.autoinstrument()
-else:
-    print(
-        "AGENTOS_API_KEY not set -- skipping agenthog instrumentation "
-        "(nothing sent to theagentos.space). See .env.example."
-    )
 
 db = SqliteDb(db_file="agentos.db")
 
