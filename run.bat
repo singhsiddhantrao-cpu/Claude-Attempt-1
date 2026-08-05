@@ -141,7 +141,7 @@ if not exist "frontend\dist\index.html" (
 REM --- 7. Start the server and open the browser --------------------------
 echo.
 echo ------------------------------------------------------------
-echo  Starting server at  http://localhost:7779
+echo  Check out the demo at  http://localhost:7779
 echo  Your browser will open in a few seconds.
 echo.
 echo  KEEP THIS WINDOW OPEN while you use the app.
